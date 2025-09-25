@@ -39,7 +39,9 @@ NUM_GPUS=8
 
 # 数据路径配置
 HEATMAP_DATA_ROOT="/share/project/lpy/test/FA_DATA/data/filtered_data/put_the_lion_on_the_top_shelf"
-OUTPUT_PATH="/share/project/lpy/BridgeVLA/logs/Wan/train/Wan2.2-TI2V-5B_heatmap_lora"
+# 生成时间戳目录名
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+OUTPUT_PATH="/share/project/lpy/BridgeVLA/logs/Wan/train/Wan2.2-TI2V-5B_heatmap_lora/${TIMESTAMP}"
 
 # 模型路径配置
 MODEL_BASE_PATH="/share/project/lpy/huggingface/Wan_2_2_TI2V_5B"

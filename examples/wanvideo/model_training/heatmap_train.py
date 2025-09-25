@@ -7,6 +7,9 @@ import torch
 import os
 import json
 import sys
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
 
 # 设置CoppeliaSim环境变量（必须在其他导入之前）
 os.environ["COPPELIASIM_ROOT"] = "/share/project/lpy/BridgeVLA/finetune/CoppeliaSim_Edu_V4_1_0_Ubuntu20_04"
@@ -57,7 +60,7 @@ class HeatmapWanTrainingModule(DiffusionTrainingModule):
         super().__init__()
         # Load models
         model_configs = self.parse_model_configs(model_paths, model_id_with_origin_paths, enable_fp8_training=False)
-        self.pipe = WanVideoPipeline.from_pretrained(torch_dtype=torch.bfloat16, device="cpu", model_configs=model_configs)
+        self.pipe = WanVideoPipeline.from_pretrained(torch_dtype=torch.bfloat16, device="cuda", model_configs=model_configs)
 
         # Training mode
         self.switch_pipe_to_training_mode(
@@ -72,6 +75,10 @@ class HeatmapWanTrainingModule(DiffusionTrainingModule):
         self.extra_inputs = extra_inputs.split(",") if extra_inputs is not None else []
         self.max_timestep_boundary = max_timestep_boundary
         self.min_timestep_boundary = min_timestep_boundary
+
+        # Debug settings
+        self.debug_counter = 0
+        self.debug_save_dir = "/share/project/lpy/BridgeVLA/Wan/DiffSynth-Studio/debug_log"
 
 
     def forward_preprocess(self, data):
@@ -120,12 +127,123 @@ class HeatmapWanTrainingModule(DiffusionTrainingModule):
         return {**inputs_shared, **inputs_posi}
 
 
+    def visualize_processed_inputs(self, inputs, data):
+        """
+        可视化经过forward_preprocess处理后的input_video和input_image
+        """
+        try:
+            # 确保debug目录存在
+            os.makedirs(self.debug_save_dir, exist_ok=True)
+
+            print(f"\n=== DEBUG VISUALIZATION (Counter: {self.debug_counter}) ===")
+            print(f"Original prompt: {data.get('prompt', 'N/A')}")
+            print(f"Processed inputs keys: {list(inputs.keys())}")
+
+            # 可视化processed input_image
+            if 'input_image' in inputs and inputs['input_image'] is not None:
+                input_img = inputs['input_image']
+                if hasattr(input_img, 'save'):  # PIL Image
+                    input_img_path = os.path.join(self.debug_save_dir, f"debug_{self.debug_counter:04d}_processed_input_image.png")
+                    input_img.save(input_img_path)
+                    print(f"Processed input image saved: {input_img_path}")
+                    print(f"Processed input image size: {input_img.size}")
+                else:
+                    print(f"Input image type: {type(input_img)}, shape: {getattr(input_img, 'shape', 'N/A')}")
+
+            # 可视化processed input_video
+            if 'input_video' in inputs and inputs['input_video'] is not None:
+                input_video = inputs['input_video']
+
+                if isinstance(input_video, list) and len(input_video) > 0:
+                    # 如果是PIL图像列表
+                    video_frames = input_video
+                    num_frames = len(video_frames)
+
+                    print(f"Processed video frames count: {num_frames}")
+
+                    # 创建网格显示所有帧
+                    cols = min(5, num_frames)  # 最多5列
+                    rows = (num_frames + cols - 1) // cols
+
+                    fig, axes = plt.subplots(rows, cols, figsize=(15, 3*rows))
+                    if rows == 1 and cols == 1:
+                        axes = [axes]
+                    elif rows == 1 or cols == 1:
+                        axes = axes.flatten()
+                    else:
+                        axes = axes.flatten()
+
+                    for i, frame in enumerate(video_frames):
+                        if i < len(axes):
+                            # 将PIL图像转换为numpy数组
+                            if hasattr(frame, 'save'):  # PIL Image
+                                frame_array = np.array(frame)
+                                axes[i].imshow(frame_array)
+                                axes[i].set_title(f"Processed Frame {i}")
+                                axes[i].axis('off')
+
+                                # 同时保存单独的帧
+                                frame_path = os.path.join(self.debug_save_dir, f"debug_{self.debug_counter:04d}_processed_frame_{i:02d}.png")
+                                frame.save(frame_path)
+                            else:
+                                axes[i].text(0.5, 0.5, f"Frame {i}\n{type(frame)}",
+                                           ha='center', va='center', transform=axes[i].transAxes)
+                                axes[i].axis('off')
+
+                    # 隐藏多余的子图
+                    for i in range(num_frames, len(axes)):
+                        axes[i].axis('off')
+
+                    # 保存组合图
+                    combined_path = os.path.join(self.debug_save_dir, f"debug_{self.debug_counter:04d}_processed_video_sequence.png")
+                    plt.tight_layout()
+                    plt.savefig(combined_path, dpi=150, bbox_inches='tight')
+                    plt.close()
+
+                    print(f"Processed video sequence saved: {combined_path}")
+                    print(f"Individual processed frames saved with pattern: debug_{self.debug_counter:04d}_processed_frame_XX.png")
+
+                    if len(video_frames) > 0 and hasattr(video_frames[0], 'size'):
+                        print(f"Processed video info: {num_frames} frames, size: {video_frames[0].size}")
+                else:
+                    print(f"Input video type: {type(input_video)}, shape: {getattr(input_video, 'shape', 'N/A')}")
+
+            # 打印其他重要的inputs信息
+            for key, value in inputs.items():
+                if key not in ['input_image', 'input_video']:
+                    if isinstance(value, (int, float, str, bool)):
+                        print(f"  {key}: {value}")
+                    elif hasattr(value, 'shape'):
+                        print(f"  {key}: shape {value.shape}, dtype {getattr(value, 'dtype', 'N/A')}")
+                    elif isinstance(value, (list, tuple)):
+                        print(f"  {key}: {type(value)} of length {len(value)}")
+                    else:
+                        print(f"  {key}: {type(value)}")
+
+            print(f"=== END DEBUG VISUALIZATION ===")
+
+        except Exception as e:
+            print(f"Error in debug visualization: {e}")
+            import traceback
+            traceback.print_exc()
+
     def forward(self, data, inputs=None):
         """
         前向传播，计算损失
         """
+        # 预处理
         if inputs is None:
             inputs = self.forward_preprocess(data)
+
+        # HARDCODED DEBUG分支 - 手动设置为True时启用可视化
+        DEBUG_VISUALIZATION = False  # 手动修改此处为True来启用debug可视化
+
+        if DEBUG_VISUALIZATION:
+            print(f"\n🔍 DEBUG MODE ACTIVATED (Step {self.debug_counter})")
+            self.visualize_processed_inputs(inputs, data)
+            self.debug_counter += 1
+
+        # 正常前向传播
         models = {name: getattr(self.pipe, name) for name in self.pipe.in_iteration_models}
         loss = self.pipe.training_loss(**models, **inputs)
         return loss
@@ -162,6 +280,7 @@ def launch_optimized_training_task(
     model: DiffusionTrainingModule,
     model_logger: ModelLogger,
     args=None,
+    temp_accelerator=None,
 ):
     """
     优化版本的训练任务启动器，专门针对40GB A100进行内存和性能优化
@@ -180,7 +299,10 @@ def launch_optimized_training_task(
     train_batch_size = args.train_batch_size
 
     # 只在主进程打印配置信息（避免多进程重复打印）
-    temp_accelerator_for_check = Accelerator()
+    if temp_accelerator is None:
+        temp_accelerator_for_check = Accelerator()
+    else:
+        temp_accelerator_for_check = temp_accelerator
     if temp_accelerator_for_check.is_main_process:
         print(f"Optimized training configuration:")
         print(f"  - Batch size: {train_batch_size}")
@@ -568,7 +690,7 @@ if __name__ == "__main__":
             args.swanlab_run = None
 
         # 使用优化版本的训练函数，专门针对40GB A100优化
-        launch_optimized_training_task(dataset, model, model_logger, args=args)
+        launch_optimized_training_task(dataset, model, model_logger, args=args, temp_accelerator=temp_accelerator)
 
         if is_main_process:
             print("Training completed successfully!")

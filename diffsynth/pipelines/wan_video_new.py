@@ -315,18 +315,43 @@ class WanVideoPipeline(BasePipeline):
         torch_dtype: torch.dtype = torch.bfloat16,
         device: Union[str, torch.device] = "cuda",
         model_configs: list[ModelConfig] = [],
-        tokenizer_config: ModelConfig = ModelConfig(model_id="Wan-AI/Wan2.1-T2V-1.3B", origin_file_pattern="google/*"),
+        tokenizer_config: ModelConfig = ModelConfig(path="/share/project/lpy/huggingface/Wan_2_2_TI2V_5B/google/umt5-xxl"),
         audio_processor_config: ModelConfig = None,
         redirect_common_files: bool = True,
         use_usp=False,
     ):
         # Redirect model path
         if redirect_common_files:
-            redirect_dict = {
-                "models_t5_umt5-xxl-enc-bf16.pth": "Wan-AI/Wan2.1-T2V-1.3B",
-                "Wan2.1_VAE.pth": "Wan-AI/Wan2.1-T2V-1.3B",
-                "models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth": "Wan-AI/Wan2.1-I2V-14B-480P",
-            }
+            # Determine the primary model_id from the first config or tokenizer_config
+            primary_model_id = None
+            if model_configs and model_configs[0].model_id:
+                primary_model_id = model_configs[0].model_id
+            elif tokenizer_config.model_id:
+                primary_model_id = tokenizer_config.model_id
+
+            # Set redirect rules based on the primary model
+            if primary_model_id and "Wan_2_2_TI2V_5B" in primary_model_id:
+                # Wan2.2-TI2V-5B redirect rules
+                redirect_dict = {
+                    "models_t5_umt5-xxl-enc-bf16.pth": primary_model_id,
+                    "Wan2.2_VAE.pth": primary_model_id,
+                    "models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth": "Wan-AI/Wan2.1-I2V-14B-480P",
+                }
+            elif primary_model_id and "Wan2.1-T2V-1.3B" in primary_model_id:
+                # Wan2.1-T2V-1.3B redirect rules (original)
+                redirect_dict = {
+                    "models_t5_umt5-xxl-enc-bf16.pth": "Wan-AI/Wan2.1-T2V-1.3B",
+                    "Wan2.1_VAE.pth": "Wan-AI/Wan2.1-T2V-1.3B",
+                    "models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth": "Wan-AI/Wan2.1-I2V-14B-480P",
+                }
+            else:
+                # Default to Wan2.2-TI2V-5B rules if unable to determine
+                redirect_dict = {
+                    "models_t5_umt5-xxl-enc-bf16.pth": "/share/project/lpy/huggingface/Wan_2_2_TI2V_5B",
+                    "Wan2.2_VAE.pth": "/share/project/lpy/huggingface/Wan_2_2_TI2V_5B",
+                    "models_clip_open-clip-xlm-roberta-large-vit-huge-14.pth": "Wan-AI/Wan2.1-I2V-14B-480P",
+                }
+
             for model_config in model_configs:
                 if model_config.origin_file_pattern is None or model_config.model_id is None:
                     continue

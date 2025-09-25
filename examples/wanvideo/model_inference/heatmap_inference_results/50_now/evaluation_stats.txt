@@ -1,0 +1,33 @@
+Evaluation Results
+==================
+Total frames evaluated: 25
+Average peak distance: 32.96 ± 57.51 pixels
+Min distance: 1.41 pixels
+Max distance: 159.10 pixels
+
+Individual distances:
+Frame 1: 142.51
+Frame 2: 3.00
+Frame 3: 3.00
+Frame 4: 2.24
+Frame 5: 3.16
+Frame 6: 147.65
+Frame 7: 5.00
+Frame 8: 4.47
+Frame 9: 5.00
+Frame 10: 5.66
+Frame 11: 148.76
+Frame 12: 2.83
+Frame 13: 8.06
+Frame 14: 6.40
+Frame 15: 5.00
+Frame 16: 140.98
+Frame 17: 4.12
+Frame 18: 4.47
+Frame 19: 4.47
+Frame 20: 4.00
+Frame 21: 159.10
+Frame 22: 4.47
+Frame 23: 5.00
+Frame 24: 3.16
+Frame 25: 1.41
